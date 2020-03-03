@@ -14,7 +14,7 @@ const fileExists = file => {
 }
 
 function processDateOrAgo(dateOrAgo) {
-    const {groups} = /^(?<amount>\d+) (?<range>y|Q|M|w|d|h|(year|quarter|month|week|day|hour)s) ago$/.exec(dateOrAgo) || {}
+    const {groups} = /^(?<amount>\d+) (?<range>y|Q|M|w|d|h|(year|quarter|month|week|day|hour)s?) ago$/.exec(dateOrAgo) || {}
     if (groups) return moment().subtract(groups.amount, groups.range)
     return moment(dateOrAgo)
 }
