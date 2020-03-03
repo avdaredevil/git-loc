@@ -20,7 +20,7 @@ global.argv = yargs
         },
         repos: {
             description: 'The Kubeflow repos to scan in',
-            default: ['kubeflow', 'metadata', 'frontend', 'pipelines', 'testing', 'kfctl', 'manifests', 'website'],
+            default: ['kubeflow', 'metadata', 'frontend', 'pipelines', 'testing', 'kfctl', 'manifests', 'website', 'avdaredevil/git-loc', 'avdaredevil/promise-enhancements'],
             type: 'string',
             alias: ['i', 'input'],
         },
