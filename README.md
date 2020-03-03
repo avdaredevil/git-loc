@@ -1,6 +1,3 @@
-## Git-Loc
-Stats for all github work done, PR based
-
 # Git-Loc
 **CLI for reading your PR contribution stats across various repo's.** This tool is written as a single-entrypoint CLI, much like `git` with commands and options as the primary driver for interaction (rather than seperate scripts).
 
