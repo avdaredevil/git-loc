@@ -21,14 +21,33 @@ global.argv = yargs
         repos: {
             description: 'The Kubeflow repos to scan in',
             default: ['kubeflow', 'metadata', 'frontend', 'pipelines', 'testing', 'kfctl', 'manifests', 'website', 'avdaredevil/git-loc', 'avdaredevil/promise-enhancements'],
-            type: 'string',
-            alias: ['i', 'input'],
+            type: 'string[]',
+            array: true,
+            alias: 'r',
         },
         'files-to-ignore': {
             description: 'Files or regexes (marked as r///<regex>/, ex. r///a/)',
             default: ['package-lock.json', 'license_info.csv', 'license.txt', 'generated/src/apis', 'sdk/python/docs/_build', 'generated/ml_metadata/proto', '/__snapshots__/', 'site-packages/', 'dev/null', 'components/centraldashboard/app/clients', 'r///(\\.(proto|pb\\.go|libsonnet)|swagger\\.json)$/', 'r///^bootstrap\\//','releasing/bootstrapper/'],
+            type: 'string[]',
+            array: true,
+            alias: ['ign', 'ignore'],
+        },
+        'default-repo-namespace': {
+            description: 'If repo is a single word, look under this Github Org / User',
+            default: 'kubeflow',
             type: 'string',
-            alias: ['i', 'input'],
+            alias: ['namespace', 'org'],
+        },
+        'pr-cache-freshness': {
+            description: 'How old can the last PR be be before the cache is marked dirty, and I fetch newer PRs only (in days)',
+            default: 1,
+            type: 'number',
+            alias: ['freshness'],
+        },
+        'expire-cache': {
+            description: 'Expire the cache, fetch all github PR data from scratch, and re-cache',
+            default: false,
+            type: 'boolean',
         },
         'input-folder': {
             description: 'Input folder to use (uses $cwd, unless overridden)',
@@ -72,11 +91,15 @@ global.argv = yargs
 
 
 // = Config ===============END==|
-
 const runCommand = async command => {
     switch(command) {
-        case 'get-github-data': return await getGitContribData()
-        case 'calculate': return await countContrib()
+        case 'get-prs':
+        case 'get-data':
+        case 'get-github-data':
+            return await getGitContribData()
+        case 'count':
+        case 'calculate':
+            return await countContrib()
     }
     throw `Unimplemented command [${command}] invoked`
 }

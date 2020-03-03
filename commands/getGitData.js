@@ -5,6 +5,7 @@
  */
 import fetch from 'node-fetch'
 import parseDiff from 'parse-diff'
+import moment from 'moment'
 import {join} from 'path'
 import {Semaphore} from 'await-semaphore'
 import {sleep} from 'promise-enhancements'
@@ -15,7 +16,7 @@ const CACHE_FILE = join(CACHE_FOLDER, 'cache.json')
 const rateLimiter = new Semaphore(10) // Only allow 10 concurrent requests at any given moment
 
 const readGHToken = _ => new Promise((res, rej) => 
-    readFile(DEFAULT_GH_TOKEN, (err, data) => 
+    readFile(argv['github-api-token-file'], (err, data) => 
         err ? rej(`Failed to read github token file: ${err.message}`) : res(data+'')
     )).then(token => {
         // To ignore line endings or whitespace
@@ -30,36 +31,44 @@ const ensureFolder = folder => existsSync(folder) || mkdirSync(folder)
 
 /**
  * Get URL content from git, while semaphore enabled, with waits
- * @param {string} url 
- * @param {'json' | 'text'} format 
- * @param {boolean} paginate Follow pages?
- * @param {(object): boolean} stopCondition Function that will be run against a page, and should return true if further scanning should be stopped?
+ * @param {string} url
+ * @param {{format: 'json' | 'text', paginate: false, readBy: 10, stopCondition: (object) => array} | ('json' | 'text')} options format
+ * @param {false} paginate Follow pages?
+ * @param {number} readBy Read in increments of how many pages?
+ * @param {(object) => array} stopCondition Function that will be run against a page, and should an object that will then be used as the new content for that page, and stop looping
  */
-async function fetchGitUrl(url, {
-    format = 'json',
-    paginate = false,
-    stopCondition = _ => false,
-}) {
+async function fetchGitUrl(url, options) {
+    let {
+        format = 'json',
+        paginate = false,
+        readBy = 10,
+        stopCondition = _ => false,
+    } = typeof options == 'string' ? {format: options} : options || {};
     if (paginate) {
         let page = 0
         let entries = []
         while (1) {
-            console.log(`    Reading pages: ${c(page+1)} -> ${c(page+10)}`)
+            console.log(`    Reading pages: ${c(page+1)} -> ${c(page+readBy)}`)
             const tenPages = await Promise
-                .resolve(Array(10).fill(0))
+                .resolve(Array(readBy).fill(0))
                 .map((_, i) => page+i+1)
                 .map(pg => fetchGitUrl(`${url}&page=${pg}`))
             const isDone = tenPages.some((pg, i) => {
-                if (!pg.length || stopCondition(pg)) return (console.log(`    Total Pages: ${c(page + i + 1)}`), 1)
+                if (!pg.length) return (console.log(`    Total Pages: ${c(page + i + 1)}`), 1)
+                const newPg = stopCondition(pg)
+                if (newPg) {
+                    entries = entries.concat(newPg)
+                    console.log(`    Stop Condition triggered, Total Pages: ${c(page + i + 1)}`)
+                    return 1
+                }
                 entries = entries.concat(pg)
             })
-            page += 10
+            page += readBy
             if (isDone) break
         }
         return entries
     }
     const release = await rateLimiter.acquire()
-    // console.log(`[Fetch] ${url}`.gray)
     const content = await Promise.retry(_ => 
         fetch(url, {headers: {Authorization: `token ${process.GIT_TOKEN}`}})
             .then(response => response[format]()),
@@ -68,28 +77,52 @@ async function fetchGitUrl(url, {
     sleep(10).then(release)
     return content
 }
+function repoName(repo) {return ~repo.indexOf('/') ? repo : `kubeflow/${repo}`}
 async function getRepoPrs(repo) {
-    const jsonFile = join(CACHE_FOLDER, `${repo}.prs.json`)
-    if (fileExists(jsonFile)) {
-        console.log('    Using','cached results'.green+'!')
-        return JSON.parse(readFileSync(jsonFile)+'')
+    const repoSafe = repo.replace(/\\|\//g,'-')
+    const jsonFile = join(CACHE_FOLDER, `${repoSafe}.prs.json`)
+    let cacheData = []
+    if (!argv['expire-cache'] && fileExists(jsonFile)) {
+        console.log('    Loading','cached results'.green+'!')
+        cacheData = JSON.parse(readFileSync(jsonFile)+'')
+        if (cacheData.length && moment().add(argv.freshness, 'days').isBefore(cacheData[0].created_at)) {
+            return cacheData
+        }
+        console.log(`    Cache is ${!cacheData.length ? 'empty, fetching data' : 'old enough, fetching incremental updates'}...`)
     }
-    const pulls = await fetchGitUrl(`https://api.github.com/repos/kubeflow/${repo}/pulls?state=closed&per_page=100`, 'json', true)
-    writeFileSync(jsonFile, JSON.stringify(pulls))
-    return pulls
+
+    const gitRepo = repoName(repo)
+    const pulls = await fetchGitUrl(`https://api.github.com/repos/${gitRepo}/pulls?state=closed&per_page=100`,
+        {format: 'json', paginate: true, readBy: cacheData.length ? 2 : 10, stopCondition: page => {
+            if (!cacheData.length) return
+            const idx = page.findIndex(ent => ent.number == cacheData[0].number)
+            if (!~idx) return
+            return page.slice(0, idx)
+        }},
+    )
+    const finalData = pulls.concat(cacheData)
+    writeFileSync(jsonFile, JSON.stringify(finalData))
+    return finalData
 }
 
 const getGitContribData = async _ => {
     //= ARGS ======================|
     let weekData = {}
-    const {user: github_user, repos} = yargs
-    const FILE_SIZE_CASUAL_COMMIT_THRESHOLD = yargs['casual-commit-threshold']
+    const {user: github_user, repos} = argv
+    const FILE_SIZE_CASUAL_COMMIT_THRESHOLD = argv['casual-commit-threshold']
     
-    const files2Ignore = yargs['files-to-ignore'].map(i => {
+    const files2Ignore = argv['files-to-ignore'].map(i => {
         if (!/^r\/\//.test(i)) return i
-        const [fl, expr] = i.slice(4).reverse().split('/')
-        return new RegExp(expr.reverse.join('/'), fl)
+        const [fl, ...expr] = i.slice(4).split('/').reverse()
+        return new RegExp(expr.reverse().join('/'), fl)
     })
+    
+    //= Validation =====================|
+    let fails = repos.some(i => /^[\w\-]+\/[\w\-]+$/)
+    if (fails.length) {
+        console.error('These repos are formatted incorrectly, they can either be like "repoA" or "user/repoB":\n', repos.map(i => c(i, 'yellow')).join(', '))
+        process.exit(1)
+    }
     
     //= Setup =====================|
     await readGHToken()
@@ -101,12 +134,14 @@ const getGitContribData = async _ => {
         const pulls = await getRepoPrs(repo)
         try {
             const myPulls = pulls.filter(i => i.user.login === github_user || i.head.user === github_user)
-            if (!myPulls.length) return console.warn(`Bruh you have no history in kubeflow/${repo}`.brightYellow)
-            console.log(`Looking at ${c(myPulls.length)}/${pulls.length} PRs`)
+            if (!myPulls.length) return console.warn(`    Bruh you have no history in ${repoName(repo)}`.brightYellow)
+            console.log(`    Looking at ${c(myPulls.length)}/${pulls.length} PRs`)
             await Promise.resolve(myPulls)
                 .map(pr => fetchGitUrl(pr.url))
                 .map(async ({number, merged_at, created_at, patch_url, commits, additions, deletions}) => {
-                    const diff = parseDiff(await fetchGitUrl(patch_url, 'text'))
+                    const diff = parseDiff(await fetchGitUrl(patch_url,
+                        {format: 'text'},
+                    ))
                     const date = merged_at || created_at
                     const w = weekData[date] = weekData[date] || {a: 0, d: 0, c: 0, pr: []}
                     const ignored = {a: 0, d: 0, ent: 0}
@@ -117,7 +152,7 @@ const getGitContribData = async _ => {
                         if (!isIgnoreFile) {
                             calc.a += adds; calc.d += del
                             if (Math.max(del, adds) > FILE_SIZE_CASUAL_COMMIT_THRESHOLD) {
-                                console.warn(`PR #${number} has a file ${to} which seems to exceed a casual file size of ${FILE_SIZE_CASUAL_COMMIT_THRESHOLD}. Make sure you didn't mean to ignore this`.brightYellow)
+                                console.warn(`        PR #${number} has a file ${to} which seems to exceed a casual file size of ${FILE_SIZE_CASUAL_COMMIT_THRESHOLD}. Make sure you didn't mean to ignore this`.brightYellow)
                             }
                             return
                         }
@@ -129,7 +164,7 @@ const getGitContribData = async _ => {
                     deletions = Math.max(deletions, calc.d)
                     additions = Math.max(additions, calc.a)
                     console.log(
-                        `    Calc PR: ${c(`#${number}`)} | +${c(additions, 'green')} -${c(deletions, 'red')} c${c(commits)}`,
+                        `        Calc PR: ${c(`#${number}`)} | +${c(additions, 'green')} -${c(deletions, 'red')} c${c(commits)}`,
                         ...(ignored.ent ? [`(Ignored ${ignored.ent} files: +${ignored.a} -${ignored.d})`] : []),
                     )
                     w.c += commits; w.a += additions; w.d += deletions
