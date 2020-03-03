@@ -4,8 +4,6 @@
 ***Note:** This will ONLY track activity that you did using PRs, direct commits to `master` will not count!*
 
 ## General Usage
-## How to get all dependencies with license and source code?
-
 ### Setup
 ```bash
 $ npm i -g git-loc
