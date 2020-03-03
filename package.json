@@ -1,10 +1,14 @@
 {
-  "name": "github-loc",
+  "name": "git-loc",
   "version": "1.0.0",
   "description": "Counts the lines of code (loc) changes you made over time spans",
-  "main": "count.js",
+  "main": "git-loc.js",
+  "preferGlobal": true,
   "scripts": {
-    "start": "node -r esm count.js"
+    "start": "node -r esm git-loc.js"
+  },
+  "bin": {
+    "git-loc": "./_esm_entrypoint.js"
   },
   "author": "Apoorv Verma [AP] <avdaredevil@gmail.com>",
   "license": "MIT",
@@ -14,7 +18,8 @@
     "moment": "^2.24.0",
     "node-fetch": "^2.6.0",
     "parse-diff": "^0.7.0",
-    "promise-enhancements": "^1.0.3"
+    "promise-enhancements": "^1.0.3",
+    "yargs": "^15.1.0"
   },
   "devDependencies": {
     "esm": "^3.2.25"
