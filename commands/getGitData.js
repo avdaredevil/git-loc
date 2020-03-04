@@ -133,43 +133,54 @@ const getGitContribData = async _ => {
         console.log(`Scanning ${github_user}@ -> ${c(repo, 'green')} (Repos Covered: ${c(i+1)})`)
         const pulls = await getRepoPrs(repo)
         try {
-            const myPulls = pulls.filter(i => i.user.login === github_user || i.head.user === github_user)
-            if (!myPulls.length) return console.warn(`    Bruh you have no history in ${repoName(repo)}`.brightYellow)
-            console.log(`    Looking at ${c(myPulls.length)}/${pulls.length} PRs`)
-            await Promise.resolve(myPulls)
-                .map(pr => fetchGitUrl(pr.url))
-                .map(async ({number, merged_at, created_at, patch_url, commits, additions, deletions}) => {
-                    const diff = parseDiff(await fetchGitUrl(patch_url,
-                        {format: 'text'},
-                    ))
-                    const date = merged_at || created_at
-                    const w = weekData[date] = weekData[date] || {a: 0, d: 0, c: 0, pr: []}
-                    const ignored = {a: 0, d: 0, ent: 0}
-                    const calc = {a: 0, d: 0}
-                    diff.forEach(({deletions: del, additions: adds, to}) => {
-                        const isIgnoreFile = files2Ignore.some(f => 
-                            f instanceof RegExp ? f.test(to) : ~to.indexOf(f))
-                        if (!isIgnoreFile) {
-                            calc.a += adds; calc.d += del
-                            if (Math.max(del, adds) > FILE_SIZE_CASUAL_COMMIT_THRESHOLD) {
-                                console.warn(`        PR #${number} has a file ${to} which seems to exceed a casual file size of ${FILE_SIZE_CASUAL_COMMIT_THRESHOLD}. Make sure you didn't mean to ignore this`.brightYellow)
+            const PRs = {mine: [], reviewed: []}
+            pulls.forEach(p => {
+                const {user, head, assignees, requested_reviewers} = p
+                if (user.login === github_user || head.user === github_user) return PRs.mine.push(p)
+                const isScannedUser = a => a.login === github_user
+                if (requested_reviewers.some(isScannedUser) || assignees.some(isScannedUser)) return PRs.reviewed.push(p)
+            })
+            if (!(PRs.mine.length + PRs.reviewed.length)) return console.warn(`    Bruh you have no history in ${repoName(repo)}`.brightYellow)
+            console.log(`    Looking at ${c(PRs.mine.length)}/${pulls.length} PRs`,(PRs.reviewed.length ? ` (and ${c(PRs.reviewed.length)} reviews)` : ''))
+            for (let [scope, prs] of Object.entries(PRs)) {
+                const isReview = scope === 'reviewed'
+                await Promise.resolve(prs)
+                    .map(pr => Promise.all([
+                        fetchGitUrl(pr.url),
+                        fetchGitUrl(pr.patch_url, {format: 'text'}),
+                    ]))
+                    .map(async ([{number, merged_at, created_at, commits, additions, deletions}, patch_data]) => {
+                        const diff = parseDiff(patch_data)
+                        const date = merged_at || created_at
+                        let w = weekData[date] = weekData[date] || {a: 0, d: 0, c: 0, pr: [], reviewed: {a: 0, d: 0, c: 0, pr: []}}
+                        if (isReview) {w = w.reviewed}
+                        const ignored = {a: 0, d: 0, ent: 0}
+                        const calc = {a: 0, d: 0}
+                        diff.forEach(({deletions: del, additions: adds, to}) => {
+                            const isIgnoreFile = files2Ignore.some(f => 
+                                f instanceof RegExp ? f.test(to) : ~to.indexOf(f))
+                            if (!isIgnoreFile) {
+                                calc.a += adds; calc.d += del
+                                if (Math.max(del, adds) > FILE_SIZE_CASUAL_COMMIT_THRESHOLD) {
+                                    console.warn(`        PR #${number} has a file ${to} which seems to exceed a casual file size of ${FILE_SIZE_CASUAL_COMMIT_THRESHOLD}. Make sure you didn't mean to ignore this`.brightYellow)
+                                }
+                                return
                             }
-                            return
-                        }
-                        ignored.a += adds; ignored.d += del
-                        ignored.ent++
-                        deletions -= del
-                        additions -= adds
+                            ignored.a += adds; ignored.d += del
+                            ignored.ent++
+                            deletions -= del
+                            additions -= adds
+                        })
+                        deletions = Math.max(deletions, calc.d)
+                        additions = Math.max(additions, calc.a)
+                        console.log(
+                            `        Calc ${isReview?'Review':'User'} PR: ${c(`#${number}`)} | +${c(additions, 'green')} -${c(deletions, 'red')} c${c(commits)}`,
+                            ...(ignored.ent ? [`(Ignored ${ignored.ent} files: +${ignored.a} -${ignored.d})`] : []),
+                        )
+                        w.c += commits; w.a += additions; w.d += deletions
+                        w.pr.push(`${repo}#${number}`)
                     })
-                    deletions = Math.max(deletions, calc.d)
-                    additions = Math.max(additions, calc.a)
-                    console.log(
-                        `        Calc PR: ${c(`#${number}`)} | +${c(additions, 'green')} -${c(deletions, 'red')} c${c(commits)}`,
-                        ...(ignored.ent ? [`(Ignored ${ignored.ent} files: +${ignored.a} -${ignored.d})`] : []),
-                    )
-                    w.c += commits; w.a += additions; w.d += deletions
-                    w.pr.push(`${repo}#${number}`)
-                })
+            }
         } catch(e) {
             console.error('Something broke', e, pulls.find(i => !i.head.user || !i.user))
             process.exit(1)
