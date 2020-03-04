@@ -8,7 +8,7 @@
 #### Get-Github-Data
 Fetch github contribution data for user
 ```shell
-git-stats get-github-data [ldap] [repos..]                         [aliases: get-data, get-prs]
+git-stats get-github-data [ldap] [repos..]                                           [aliases: get-data, get-prs]
 ```
 | Key | Type | Default Value | Description |
 | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ git-stats get-github-data [ldap] [repos..]                         [aliases: get
 #### Calculate
 Calculate contributions for user for a give time-range
 ```shell
-git-stats calculate [from] [to]                                                [aliases: count]
+git-stats calculate [from] [to]                                                                  [aliases: count]
 ```
 | Key | Type | Default Value | Description |
 | --- | --- | --- | --- |
