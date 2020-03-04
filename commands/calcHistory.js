@@ -1,7 +1,8 @@
 /**
  * Command implementation for Count Contributions in git-loc
  * About:
- * - Takes a time range and calculated github work done in that range
+ * - Takes dynamic time input "6 <days/hours/etc> ago" or timestamp
+ * - Given a range (default 6 months to now) calculate contributions
  */
 import moment from 'moment'
 import {join} from 'path'

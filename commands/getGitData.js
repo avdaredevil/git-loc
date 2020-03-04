@@ -1,7 +1,14 @@
 /**
  * Command implementation for Get Github Data in git-loc
  * About:
- * - TBD
+ * - Use Github Auth to access your data with extended API Quotas
+ * - Process:
+ *   - Fetch all PRs per repo (including retry and pagination) - 10 pages async
+ *   - Differential Caching for Repo Data (cache + fetch (2 pg / async) for new PRs)
+ *   - Fetch PR Data, per PR, and the Diff Data
+ *   - Scan diff data and count only contributions to files that pass the ignore check (auto-gen files are skipped)
+ *   - Create a Hashmap<week, {a, d, commit, prs}>
+ *   - Write Contribution Data to ../cache/cache.json
  */
 import fetch from 'node-fetch'
 import parseDiff from 'parse-diff'
