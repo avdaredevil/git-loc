@@ -9,6 +9,7 @@ import {join} from 'path'
 import {readFileSync, statSync} from 'fs'
 
 const CACHE_FILE = join(__dirname, '../cache', 'cache.json')
+const StatObject = Object.freeze({adds: 0, dels: 0, commits: 0, prs: []})
 
 const fileExists = file => {
     try {statSync(file);return true} catch(e) {console.error(e);return false}
@@ -34,15 +35,21 @@ const countContrib = async _ => {
     
     //= Work ======================|
     weekData = JSON.parse(readFileSync(CACHE_FILE))
-    let stats = {adds: 0, dels: 0, commits: 0, prs: []}
+    let [stats, rev] = [{...StatObject}, {...StatObject}]
     console.log(`Read ${c(Object.keys(weekData).length)} week entries...`)
-    Object.entries(weekData).forEach(([w, {a, d, c, pr}]) => {
+    Object.entries(weekData).forEach(([w, {a, d, c, pr, reviewed}]) => {
         w = isNaN(+w) ? w : w*1000
         if (fromTime.isAfter(w) || toTime.isBefore(w)) return
         stats.adds += a
         stats.dels += d
         stats.commits += c
         stats.prs = stats.prs.concat(pr || [])
+
+        const {a: ra, d: rd, c: rc, pr: rpr} = reviewed
+        rev.adds += ra
+        rev.dels += rd
+        rev.commits += rc
+        rev.prs = rev.prs.concat(rpr || [])
     })
 
     console.log(`Stats for ${c(fromTime)} -> ${c(toTime)}`)
@@ -50,7 +57,9 @@ const countContrib = async _ => {
         `Added Lines   : ${c(stats.adds, 'green')}`,
         `Removed Lines : ${c(stats.dels, 'red')}`,
         `Commits       : ${c(stats.commits)}`,
-        stats.prs && `PRs           : ${c(stats.prs.length)}${stats.prs.length > 0 && stats.prs.length < 5 ? ' - '+stats.prs.map(i => c(i, 'yellow')).join(', ') : ''}`
+        stats.prs && `PRs           : ${c(stats.prs.length)}${stats.prs.length > 0 && stats.prs.length < 5 ? ' - '+stats.prs.map(i => c(i, 'yellow')).join(', ') : ''}`,
+        `  `,
+        `Reviewed ${c(rev.prs.length)} PRs (${c(rev.commits)} commits) with lines: ${c(rev.adds, 'green')} added, ${c(rev.dels, 'red')} removed`,
     ].forEach(i => i && console.log(i))
 }
 

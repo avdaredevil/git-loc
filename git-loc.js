@@ -27,7 +27,7 @@ global.argv = yargs
         },
         'files-to-ignore': {
             description: 'Files or regexes (marked as r///<regex>/, ex. r///a/)',
-            default: ['package-lock.json', 'license_info.csv', 'license.txt', 'generated/src/apis', 'sdk/python/docs/_build', 'generated/ml_metadata/proto', '/__snapshots__/', 'site-packages/', 'dev/null', 'components/centraldashboard/app/clients', 'r///(\\.(proto|pb\\.go|libsonnet)|swagger\\.json)$/', 'r///^bootstrap\\//','releasing/bootstrapper/'],
+            default: ['package-lock.json', 'license_info.csv', 'license.txt', 'generated/src/apis', 'sdk/python/docs/_build', 'generated/ml_metadata/proto', '/__snapshots__/', 'site-packages/', 'dev/null', 'components/centraldashboard/app/clients', '/static/', 'r///(\\.(proto|pb\\.go|libsonnet|snap)|swagger\\.json)$/', 'r///^bootstrap\\//','releasing/bootstrapper/'],
             type: 'string[]',
             array: true,
             alias: ['ign', 'ignore'],
