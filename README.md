@@ -49,3 +49,6 @@ $ git-loc calculate "1 year ago" "2 quarters ago"
 $ cd </path/to/git_loc (cloned)>
 $ npm start -- get-github-data <args>
 ```
+
+---
+***By**: [Apoorv Verma [AP]](http://linked.in/in/apoorvverma)*
