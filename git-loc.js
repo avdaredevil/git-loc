@@ -3,6 +3,7 @@ import 'colors'
 import yargs from 'yargs'
 import path from 'path'
 import {homedir} from 'os'
+import {version} from './package.json'
 import countContrib from './commands/calcHistory'
 import getGitContribData from './commands/getGitData'
 
@@ -83,11 +84,14 @@ global.argv = yargs
             default: '0 months ago',
         },
     })
+    .version(`v${version}`)
+    .usage(`Git-Loc produces git line-of-change contributions for a user\nVersion: ${c('v'+version, 'italic')}`.brightYellow)
+    .epilog('\n-- By: AP'.grey)
     .help()
     .alias('help', 'h')
     .wrap(yargs.terminalWidth())
     .demandCommand().recommendCommands().strict()
-    .scriptName('git-stats').argv
+    .scriptName('git-loc').argv
 
 
 // = Config ===============END==|
