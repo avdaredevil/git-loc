@@ -30,8 +30,8 @@ git-stats calculate [from] [to]                                                 
 ```
 | Key | Type | Default Value | Description |
 | --- | --- | --- | --- |
-| `from` | `string` | 6 months ago | `<num> <years|quarters|months|weeks|days|hours> ago` OR *A date like input (what date to look from)* |
-| `to` | `string` | 0 months ago | `<num> <years|quarters|months|weeks|days|hours> ago` OR *A date like input (what date to look from)* |
+| `from` | `string` | 6 months ago | <code>&lt;num> <years&#124;quarters&#124;months&#124;weeks&#124;days&#124;hours> ago</code> OR *A date like input (what date to look from)* |
+| `to` | `string` | 0 months ago | <code>&lt;num> <years&#124;quarters&#124;months&#124;weeks&#124;days&#124;hours> ago</code> OR *A date like input (what date to look from)* |
 
 ### Setup
 ```bash
