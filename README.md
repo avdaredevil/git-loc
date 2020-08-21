@@ -18,6 +18,7 @@ git-stats get-github-data [ldap] [repos..]                                      
 | `default-repo-namespace` | `string` | kubeflow | If repo is a single word, look under this Github Org / User |
 | `pr-cache-freshness` | `number` | 1 | How old can the last PR be be before the cache is marked dirty, and I fetch newer PRs only (in days) |
 | `expire-cache` | `boolean` | false | Expire the cache, fetch all github PR data from scratch, and re-cache |
+| `verbose` | `boolean` | false | Increase the output verbosity of this tool. This includes throttle errors, passive debug logs, etc |
 | `input-folder` | `string` | . | Input folder to use (uses $cwd, unless overridden) |
 | `casual-commit-threshold` | `number` | 500 | How much can max(loc_a, loc_d) be before it seems to be an auto-generated file? (Will generate a warning) |
 | `github-api-token-file` | `string` | 1 | You need to create a github personal access token at https://github.com/settings/tokens, because github has a very strict limit on anonymous API usage. |
