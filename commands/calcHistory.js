@@ -12,7 +12,7 @@ const CACHE_FILE = join(__dirname, '../cache', 'cache.json')
 const StatObject = Object.freeze({adds: 0, dels: 0, commits: 0, prs: []})
 
 const fileExists = file => {
-    try {statSync(file);return true} catch(e) {console.error(e);return false}
+    try {statSync(file);return true} catch(e) {e.code == 'ENOENT' || console.error(e);return false}
 }
 
 function processDateOrAgo(dateOrAgo) {
@@ -26,13 +26,13 @@ const countContrib = async _ => {
     let weekData = {}
     const fromTime = processDateOrAgo(argv.from)
     const toTime = processDateOrAgo(argv.to)
-    
+
     //= Setup =====================|
     if (!fileExists(CACHE_FILE)) {
         console.error(`Missing file: ${c(CACHE_FILE)}, please run the get-prs command first!`)
         process.exit(1)
     }
-    
+
     //= Work ======================|
     weekData = JSON.parse(readFileSync(CACHE_FILE))
     let [stats, rev] = [{...StatObject}, {...StatObject}]

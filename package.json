@@ -1,6 +1,6 @@
 {
   "name": "git-loc",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Counts the lines of code (loc) changes you made over time spans",
   "main": "git-loc.js",
   "preferGlobal": true,
@@ -20,6 +20,6 @@
     "node-fetch": "^2.6.0",
     "parse-diff": "^0.7.0",
     "promise-enhancements": "^1.0.3",
-    "yargs": "^15.1.0"
+    "yargs": "^15.4.1"
   }
 }
