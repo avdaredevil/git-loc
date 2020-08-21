@@ -22,10 +22,19 @@ const CACHE_FOLDER = join(__dirname, '../cache')
 const CACHE_FILE = join(CACHE_FOLDER, 'cache.json')
 const rateLimiter = new Semaphore(10) // Only allow 10 concurrent requests at any given moment
 
-const readGHToken = _ => new Promise((res, rej) => 
-    readFile(argv['github-api-token-file'], (err, data) => 
-        err ? rej(`Failed to read github token file: ${err.message}`) : res(data+'')
-    )).then(token => {
+const readGHToken = _ => new Promise((res, rej) =>
+    readFile(argv['github-api-token-file'], (err, data) => {
+        if (err) {
+            if (err.code === 'ENOENT') return rej([
+                `You don't have a ${'Github API'.yellow.bold} Token, you can:`,
+                `- Download one from: ${'https://github.com/settings/tokens'.yellow}`,
+                `- Save to: ${'~/.github_api_token'.yellow}`,
+                `- OR, point to a custom file via the ${'--github-api-token-file'.yellow} arg`,
+            ].join('\n'))
+            return rej(`Failed to read github token file: ${err.message}`)
+        }
+        res(data+'')
+    })).then(token => {
         // To ignore line endings or whitespace
         process.GIT_TOKEN = token.replace(/\s/g, '')
     })
@@ -76,15 +85,21 @@ async function fetchGitUrl(url, options) {
         return entries
     }
     const release = await rateLimiter.acquire()
-    const content = await Promise.retry(_ => 
-        fetch(url, {headers: {Authorization: `token ${process.GIT_TOKEN}`}})
-            .then(response => response[format]()),
-        {times: 5, printErrors: true, errorPrefix: `    [getGit] Failed to probe: ${url}, will retry\n`},
-    )
-    sleep(10).then(release)
+    const simpleFetchData = _ => fetch(url, {headers: {Authorization: `token ${process.GIT_TOKEN}`}})
+        .then(response => ({out: response[format](), response}))
+        .then(async ({out, response}) => {
+            // Handle error responses
+            if (response.status >= 400) throw out
+            return out
+        })
+    const content = await Promise.retry(simpleFetchData,
+        {times: 5, printErrors: true, errorPrefix: `    ${'[getGit::fetchFast]'.cyan} Failed to probe: ${url}, will retry asap\n    `},
+    ).catch(_ => Promise.retry(simpleFetchData,
+        {times: 20, delay: 30e3, printErrors: true, errorPrefix: `    ${'[getGit::passive]'.cyan} Failed to probe: ${url}, will retry in 30s\n    `},
+    )).finally(_ => sleep(10).then(release))
     return content
 }
-function repoName(repo) {return ~repo.indexOf('/') ? repo : `kubeflow/${repo}`}
+function repoName(repo) {return ~repo.indexOf('/') ? repo : `${argv.namespace}/${repo}`}
 async function getRepoPrs(repo) {
     const repoSafe = repo.replace(/\\|\//g,'-')
     const jsonFile = join(CACHE_FOLDER, `${repoSafe}.prs.json`)
@@ -99,7 +114,7 @@ async function getRepoPrs(repo) {
     }
 
     const gitRepo = repoName(repo)
-    const pulls = await fetchGitUrl(`https://api.github.com/repos/${gitRepo}/pulls?state=closed&per_page=100`,
+    const pulls = await fetchGitUrl(`https://api.github.com/repos/${gitRepo}/pulls?state=merged&per_page=100`,
         {format: 'json', paginate: true, readBy: cacheData.length ? 2 : 10, stopCondition: page => {
             if (!cacheData.length) return
             const idx = page.findIndex(ent => ent.number == cacheData[0].number)
@@ -117,24 +132,24 @@ const getGitContribData = async _ => {
     let weekData = {}
     const {user: github_user, repos} = argv
     const FILE_SIZE_CASUAL_COMMIT_THRESHOLD = argv['casual-commit-threshold']
-    
+
     const files2Ignore = argv['files-to-ignore'].map(i => {
         if (!/^r\/\//.test(i)) return i
         const [fl, ...expr] = i.slice(4).split('/').reverse()
         return new RegExp(expr.reverse().join('/'), fl)
     })
-    
+
     //= Validation =====================|
     let fails = repos.some(i => /^[\w\-]+\/[\w\-]+$/)
     if (fails.length) {
         console.error('These repos are formatted incorrectly, they can either be like "repoA" or "user/repoB":\n', repos.map(i => c(i, 'yellow')).join(', '))
         process.exit(1)
     }
-    
+
     //= Setup =====================|
     await readGHToken()
     ensureFolder(CACHE_FOLDER)
-    
+
     //= Work ======================|
     await Promise.resolve(repos).sync(async (repo, i) => {
         console.log(`Scanning ${github_user}@ -> ${c(repo, 'green')} (Repos Covered: ${c(i+1)})`)
@@ -164,7 +179,7 @@ const getGitContribData = async _ => {
                         const ignored = {a: 0, d: 0, ent: 0}
                         const calc = {a: 0, d: 0}
                         diff.forEach(({deletions: del, additions: adds, to}) => {
-                            const isIgnoreFile = files2Ignore.some(f => 
+                            const isIgnoreFile = files2Ignore.some(f =>
                                 f instanceof RegExp ? f.test(to) : ~to.indexOf(f))
                             if (!isIgnoreFile) {
                                 calc.a += adds; calc.d += del
@@ -193,7 +208,7 @@ const getGitContribData = async _ => {
             process.exit(1)
         }
         writeFileSync(CACHE_FILE, JSON.stringify(weekData))
-    })    
+    })
 }
 
 export default getGitContribData
@@ -205,7 +220,7 @@ export default getGitContribData
         i && await sleep(1000)
         const contribs = await fetch(`https://api.github.com/repos/kubeflow/${repo}/stats/contributors`)
             .then(response => response.json())
-            
+
         try {
             const {weeks} = contribs.find(i => i.author.login === 'avdaredevil') || {}
             if (!weeks) return console.warn(`Bruh you have no history in kubeflow/${repo}`.red)
