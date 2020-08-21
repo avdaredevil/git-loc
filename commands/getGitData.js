@@ -88,14 +88,15 @@ async function fetchGitUrl(url, options) {
     const simpleFetchData = _ => fetch(url, {headers: {Authorization: `token ${process.GIT_TOKEN}`}})
         .then(async response => {
             // Handle error responses
+            const {status} = response
             const out = await response[format]()
-            if (response.status >= 400) throw out
+            if (status >= 400) throw out
             return out
         })
     const content = await Promise.retry(simpleFetchData,
-        {times: 5, printErrors: true, errorPrefix: `    ${'[getGit::fetchFast]'.cyan} Failed to probe: ${url}, will retry asap\n    `},
+        {times: 5, printErrors: argv.verbose, errorPrefix: `    ${'[getGit::fetchFast]'.cyan} Failed to probe: ${url}, will retry asap\n    `},
     ).catch(_ => Promise.retry(simpleFetchData,
-        {times: 20, delay: 30e3, printErrors: true, errorPrefix: `    ${'[getGit::passive]'.cyan} Failed to probe: ${url}, will retry in 30s\n    `},
+        {times: 20, delay: 30e3, printErrors: argv.verbose, errorPrefix: `    ${'[getGit::passive]'.cyan} Failed to probe: ${url}, will retry in 30s\n    `},
     )).finally(_ => sleep(10).then(release))
     return content
 }
@@ -114,7 +115,7 @@ async function getRepoPrs(repo) {
     }
 
     const gitRepo = repoName(repo)
-    const pulls = await fetchGitUrl(`https://api.github.com/repos/${gitRepo}/pulls?state=merged&per_page=100`,
+    const pulls = await fetchGitUrl(`https://api.github.com/repos/${gitRepo}/pulls?state=closed&per_page=100`,
         {format: 'json', paginate: true, readBy: cacheData.length ? 2 : 10, stopCondition: page => {
             if (!cacheData.length) return
             const idx = page.findIndex(ent => ent.number == cacheData[0].number)
@@ -173,6 +174,9 @@ const getGitContribData = async _ => {
                     ]))
                     .map(async ([{number, merged_at, created_at, commits, additions, deletions}, patch_data]) => {
                         const diff = parseDiff(patch_data)
+                        if (!merged_at) return console.log(
+                            `        Calc ${isReview?'Review':'User'} PR: ${c(`#${number}`)} is being ignored since looks closed and not merged`
+                        )
                         const date = merged_at || created_at
                         let w = weekData[date] = weekData[date] || {a: 0, d: 0, c: 0, pr: [], reviewed: {a: 0, d: 0, c: 0, pr: []}}
                         if (isReview) {w = w.reviewed}

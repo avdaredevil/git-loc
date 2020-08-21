@@ -50,6 +50,11 @@ global.argv = yargs
             default: false,
             type: 'boolean',
         },
+        verbose: {
+            description: 'Increase the output verbosity of this tool. This includes throttle errors, passive debug logs, etc',
+            default: false,
+            type: 'boolean',
+        },
         'input-folder': {
             description: 'Input folder to use (uses $cwd, unless overridden)',
             default: '.',
