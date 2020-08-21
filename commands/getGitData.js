@@ -23,9 +23,18 @@ const CACHE_FILE = join(CACHE_FOLDER, 'cache.json')
 const rateLimiter = new Semaphore(10) // Only allow 10 concurrent requests at any given moment
 
 const readGHToken = _ => new Promise((res, rej) =>
-    readFile(argv['github-api-token-file'], (err, data) =>
-        err ? rej(`Failed to read github token file: ${err.message}`) : res(data+'')
-    )).then(token => {
+    readFile(argv['github-api-token-file'], (err, data) => {
+        if (err) {
+            if (err.code === 'ENOENT') return rej([
+                `You don't have a ${'Github API'.yellow.bold} Token, you can:`,
+                `- Download one from: ${'https://github.com/settings/tokens'.yellow}`,
+                `- Save to: ${'~/.github_api_token'.yellow}`,
+                `- OR, point to a custom file via the ${'--github-api-token-file'.yellow} arg`,
+            ].join('\n'))
+            return rej(`Failed to read github token file: ${err.message}`)
+        }
+        res(data+'')
+    })).then(token => {
         // To ignore line endings or whitespace
         process.GIT_TOKEN = token.replace(/\s/g, '')
     })
@@ -105,7 +114,7 @@ async function getRepoPrs(repo) {
     }
 
     const gitRepo = repoName(repo)
-    const pulls = await fetchGitUrl(`https://api.github.com/repos/${gitRepo}/pulls?state=closed&per_page=100`,
+    const pulls = await fetchGitUrl(`https://api.github.com/repos/${gitRepo}/pulls?state=merged&per_page=100`,
         {format: 'json', paginate: true, readBy: cacheData.length ? 2 : 10, stopCondition: page => {
             if (!cacheData.length) return
             const idx = page.findIndex(ent => ent.number == cacheData[0].number)
