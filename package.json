@@ -1,6 +1,6 @@
 {
   "name": "git-loc",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Counts the lines of code (loc) changes you made over time spans",
   "main": "git-loc.js",
   "preferGlobal": true,

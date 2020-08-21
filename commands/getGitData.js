@@ -86,9 +86,9 @@ async function fetchGitUrl(url, options) {
     }
     const release = await rateLimiter.acquire()
     const simpleFetchData = _ => fetch(url, {headers: {Authorization: `token ${process.GIT_TOKEN}`}})
-        .then(response => ({out: response[format](), response}))
-        .then(async ({out, response}) => {
+        .then(async response => {
             // Handle error responses
+            const out = await response[format]()
             if (response.status >= 400) throw out
             return out
         })
